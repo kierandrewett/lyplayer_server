@@ -10,6 +10,7 @@ pub type LYServerPluginInstance = Arc<dyn LYServerPlugin + Send + Sync>;
 #[async_trait::async_trait]
 pub trait LYServerSharedDataPlugins {
     async fn get_plugin_by_id(&self, id: &str) -> Option<LYServerPluginInstance>;
+    async fn get_plugin_metadata_by_id(&self, id: &str) -> Option<LYServerPluginMetadata>;
 }
 
 #[async_trait::async_trait]
@@ -22,12 +23,21 @@ impl LYServerSharedDataPlugins for LYServerSharedData {
             })
             .collect::<Vec<(LYServerPluginInstance, LYServerPluginMetadata)>>();
 
-        log::info!("Searching for plugin: {:?}", loaded_plugins.clone().into_iter().map(|(_, metadata)| metadata.id).collect::<Vec<String>>());
-
         loaded_plugins
             .clone()
             .into_iter()
             .find(|(_, metadata)| metadata.id == id)
             .map(|(plugin, _)| plugin.clone())
+    }
+
+    async fn get_plugin_metadata_by_id(&self, id: &str) -> Option<LYServerPluginMetadata> {
+        let loaded_plugins = self.loaded_plugins.read().await;
+        let loaded_plugins = loaded_plugins.iter()
+            .map(|(_, metadata, _)| metadata.clone())
+            .collect::<Vec<LYServerPluginMetadata>>();
+
+        loaded_plugins
+            .into_iter()
+            .find(|metadata| metadata.id == id)
     }
 }

@@ -7,7 +7,7 @@ extern "C" fn lyserver_plugin_init() {
     log::info!("✨ Hello from LYServer Hello Plugin!");
 
     log::info!("This is a simple plugin that demonstrates how to use the LYServer Plugin API.");
-    let init_event = LYServerMessageEvent::new("plugin_init", "all", "hello@lyserver", "");
+    let init_event = LYServerMessageEvent::new("plugin_init", "all", "hello@lyserver", 0);
     ipc::tx(&init_event)
         .expect("Failed to send plugin init event");
 
@@ -16,7 +16,7 @@ extern "C" fn lyserver_plugin_init() {
             let request = message.data_as::<LYServerHTTPRequest>()
                 .expect("Failed to deserialize LYServerHTTPRequest");
 
-            if request.match_request("GET", "/hello") {
+            if request.match_request("GET", "/hello").is_some() {
                 let response = request.build_response()
                     .body("hello from WASM!")
                     .build();

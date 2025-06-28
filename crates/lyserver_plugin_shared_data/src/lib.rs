@@ -42,10 +42,10 @@ impl LYServerPluginSharedData {
 
     pub fn dispatch_raw_event(
         &self,
-        event: String
+        event: Vec<u8>
     ) -> anyhow::Result<()> {
-        let event_obj = serde_json::from_str::<LYServerMessageEvent>(&event)
-            .map_err(|e| anyhow::anyhow!("Failed to parse event JSON: {}", e))?;
+        let event_obj = serde_cbor::from_slice::<LYServerMessageEvent>(&event)
+            .map_err(|e| anyhow::anyhow!("Failed to parse event CBOR: {}", e))?;
 
         self.dispatch_event(event_obj)
     }
@@ -62,9 +62,6 @@ impl LYServerPluginSharedData {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Plugin ID is not set"))?
             .clone();
-
-        let data = serde_json::to_value(data)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize event data: {}", e))?;
 
         Ok(LYServerMessageEvent::new(event_type, target, LYServerMessageEventTarget::Plugin(plugin_id), data))
     }
@@ -143,7 +140,7 @@ impl LYServerPluginSharedData {
             "plugin_init",
             LYServerMessageEventTarget::All,
             LYServerMessageEventTarget::Plugin(plugin_id),
-            serde_json::Value::Null,
+            serde_cbor::Value::Null,
         );
 
         self.dispatch_event(init_event)

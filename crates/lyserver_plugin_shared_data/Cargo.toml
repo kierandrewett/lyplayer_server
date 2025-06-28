@@ -10,6 +10,7 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
+serde_cbor = { workspace = true }
 
 lyserver_shared_data = { path = "../lyserver_shared_data" }
 lyserver_messaging_shared = { path = "../lyserver_messaging_shared" }

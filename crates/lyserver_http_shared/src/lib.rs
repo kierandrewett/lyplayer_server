@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
+use bytes::Bytes;
+use path_tree::PathTree;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -62,17 +64,57 @@ impl LYServerHTTPResponseBuilder {
     }
 }
 
+pub struct LYServerHTTPRouteMatch {
+    pub method: String,
+    pub uri: String,
+    pub requested_uri: String,
+    pub params: HashMap<String, String>,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LYServerHTTPRequest {
     pub method: String,
     pub uri: String,
+    pub params: HashMap<String, String>,
     pub version: String,
     pub headers: HashMap<String, String>,
+    pub body: Option<Vec<u8>>,
 }
 
 impl LYServerHTTPRequest {
-    pub fn match_request(&self, method: &str, uri: &str) -> bool {
-        self.method.eq_ignore_ascii_case(method) && self.uri == uri
+    pub fn new(method: String, uri: String, version: String, headers: HashMap<String, String>, body: Option<Vec<u8>>) -> Self {
+        Self {
+            method,
+            uri,
+            params: HashMap::new(),
+            version,
+            headers,
+            body,
+        }
+    }
+
+    pub fn match_request(&self, method: &str, uri: &str) -> Option<LYServerHTTPRouteMatch> {
+        if !self.method.eq_ignore_ascii_case(method) {
+            return None;
+        }
+
+        let mut tree = PathTree::new();
+        let _ = tree.insert(uri, 0);
+        if let Some((_, url)) = tree.find(&self.uri) {
+            let params = url.params()
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+
+            Some(LYServerHTTPRouteMatch {
+                method: self.method.clone(),
+                uri: uri.to_string(),
+                requested_uri: self.uri.clone(),
+                params,
+            })
+        } else {
+            None
+        }
     }
 
     pub fn build_response(&self) -> LYServerHTTPResponseBuilder {

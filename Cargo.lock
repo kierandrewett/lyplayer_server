@@ -1315,6 +1315,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
+
+[[package]]
 name = "hashbrown"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1848,6 +1854,8 @@ dependencies = [
 name = "lyserver_http_shared"
 version = "0.1.0"
 dependencies = [
+ "bytes",
+ "path-tree",
  "serde",
  "serde_json",
 ]
@@ -1859,6 +1867,7 @@ dependencies = [
  "anyhow",
  "lyserver_random_id",
  "serde",
+ "serde_cbor",
  "serde_json",
 ]
 
@@ -1890,6 +1899,7 @@ dependencies = [
  "lyserver_messaging_shared",
  "lyserver_shared_data",
  "serde",
+ "serde_cbor",
  "serde_json",
  "tokio",
 ]
@@ -1906,6 +1916,7 @@ dependencies = [
  "lyserver_plugin_shared_data",
  "lyserver_shared_data",
  "serde",
+ "serde_cbor",
  "serde_json",
  "tokio",
  "toml",
@@ -1920,6 +1931,7 @@ dependencies = [
  "lyserver_http_shared",
  "lyserver_messaging_shared",
  "serde",
+ "serde_cbor",
  "serde_json",
 ]
 
@@ -2147,6 +2159,15 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "path-tree"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2a97453bc21a968f722df730bfe11bd08745cb50d1300b0df2bda131dece136"
+dependencies = [
+ "smallvec",
 ]
 
 [[package]]
@@ -2596,6 +2617,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde_cbor"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
+dependencies = [
+ "half",
+ "serde",
 ]
 
 [[package]]

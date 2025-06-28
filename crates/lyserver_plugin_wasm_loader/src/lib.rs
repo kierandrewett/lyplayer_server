@@ -143,11 +143,10 @@ pub fn mutate_linker<'a>(
                 let message = plugin_shared_data_clone.receive_event().await;
 
                 if let Some(response) = message {
-                    let serialized = serde_json::to_string(&response)
+                    let serialized = serde_cbor::to_vec(&response)
                         .expect("Failed to serialize message");
 
-                    let response_bytes = serialized.as_bytes();
-                    let response_len = response_bytes.len();
+                    let response_len = serialized.len();
 
                     let alloc = caller
                         .get_export(LYSERVER_PLUGIN_ABI_ALLOC_METHOD)
@@ -163,7 +162,7 @@ pub fn mutate_linker<'a>(
                         .call_async(&mut caller, response_len as i32)
                         .await?;
 
-                    memory.write(&mut caller, ptr as usize, response_bytes)?;
+                    memory.write(&mut caller, ptr as usize, &serialized)?;
                     memory.write(&mut caller, ret_ptr_ptr as usize, &(ptr as i32).to_le_bytes())?;
                     memory.write(&mut caller, ret_len_ptr.try_into().unwrap(), &(response_len as i32).to_le_bytes())?;
                 } else {
@@ -192,9 +191,8 @@ pub fn mutate_linker<'a>(
                 let start = ptr as usize;
                 let end = start + len as usize;
                 let data = memory.data(&caller)[start..end].to_vec();
-                let msg = String::from_utf8_lossy(&data);
 
-                let result_code: u32 = match plugin_shared_data_clone.dispatch_raw_event(msg.to_string()) {
+                let result_code: u32 = match plugin_shared_data_clone.dispatch_raw_event(data) {
                     Ok(_) => 0,
                     Err(_) => 1,
                 };

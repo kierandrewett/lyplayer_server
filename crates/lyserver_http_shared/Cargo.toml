@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+path-tree = "0.8"
+bytes = "1"

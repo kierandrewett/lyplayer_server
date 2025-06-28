@@ -16,7 +16,8 @@ impl LYServerSharedDataDatabase for LYServerSharedData {
             let mut query_params = vec![database.to_string(), query.to_string()];
             query_params.extend(args.into_iter().map(|arg| arg.into()));
 
-            let result = db.invoke("query", query_params).await?;
+            let result = db.invoke("query", query_params).await
+                .map_err(|e| anyhow::anyhow!("Failed to execute query '{}': {}", query, e))?;
 
             Ok(result)
         } else {

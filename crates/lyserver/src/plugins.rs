@@ -53,7 +53,7 @@ impl LYServerPluginManager {
 
                     while let Some(event) = shared_data_clone.receive_event().await {
                         log::debug!("Broadcasting global event '{}': {} -> {}", event.event_type, event.event_sender.to_string(), event.event_target.to_string());
-            
+
                         let plugin_tx_map = shared_data_clone.messaging_plugin_tx.write().await;
             
                         for (plugin_id, tx) in plugin_tx_map.iter() {

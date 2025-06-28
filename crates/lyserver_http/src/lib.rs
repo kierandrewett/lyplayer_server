@@ -60,14 +60,14 @@ impl LYServerPlugin for LYServerHTTPServerPlugin {
                     if event.event_type == "http_request" {
                         let request = event.data_as::<LYServerHTTPRequest>().expect("Failed to deserialize LYServerHTTPRequest");
 
-                        if request.match_request("GET", "/") {
+                        if request.match_request("GET", "/").is_some() {
                             let response = request.build_response()
                                 .body("Welcome to LYServer")
                                 .build();
 
                             self.plugin_shared_data.reply_event("http_response", event, response).await
                                 .expect("Failed to reply to HTTP request event");
-                        } else if request.match_request("GET", "/status") {
+                        } else if request.match_request("GET", "/status").is_some() {
                             let server_status_data = self.plugin_shared_data.app_shared_data.get_server_status().await;
 
                             let response = request.build_response()
@@ -76,7 +76,7 @@ impl LYServerPlugin for LYServerHTTPServerPlugin {
 
                             self.plugin_shared_data.reply_event("http_response", event, response).await
                                 .expect("Failed to reply to HTTP request event");
-                        } else if request.match_request("GET", "/favicon.ico") {
+                        } else if request.match_request("GET", "/favicon.ico").is_some() {
                             let response = request.not_found_response();
 
                             self.plugin_shared_data.reply_event("http_response", event, response).await

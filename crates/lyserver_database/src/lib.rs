@@ -49,10 +49,10 @@ impl LYServerPlugin for LYServerDatabasePlugin {
     fn metadata(&self) -> lyserver_plugin_common::LYServerPluginMetadata {
         LYServerPluginMetadata::builder()
             .id("database@lyserver.local")
-            .name("LYPlayerDatabasePlugin")
-            .description("Database plugin for LYPlayer")
+            .name("LYServerDatabasePlugin")
+            .description("Database plugin for LYServer")
             .version(env!("CARGO_PKG_VERSION").to_string())
-            .author("LYPlayer")
+            .author("LYServer")
             .build()
     }
 

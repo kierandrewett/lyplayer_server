@@ -1,11 +1,11 @@
 use std::{collections::HashMap, sync::Arc, task::{Context, Poll}, time::Duration};
 
-use actix_web::{body::BoxBody, dev::{Service, ServiceRequest, ServiceResponse, Transform}, http::StatusCode, web, Error};
+use actix_web::{body::BoxBody, dev::{Service, ServiceRequest, ServiceResponse, Transform}, http::StatusCode, web, Error, HttpMessage};
 use futures_util::future::{ok, LocalBoxFuture, Ready};
 use lyserver_http_shared::{LYServerHTTPRequest, LYServerHTTPResponse};
 use lyserver_messaging_shared::LYServerMessageEventTarget;
 use lyserver_plugin_shared_data::LYServerPluginSharedData;
-use lyserver_shared_data::{LYServerSharedData, LYServerSharedDataMessaging};
+use lyserver_shared_data::{LYServerSharedData, LYServerSharedDataMessaging, LYServerSharedDataPlugins};
 use serde::Serialize;
 use serde_json::json;
 
@@ -56,20 +56,25 @@ where
                 let http_req = {
                     let req_ref = req_for_response.request();
     
-                    LYServerHTTPRequest {
-                        method: req_ref.method().to_string(),
-                        uri: req_ref.uri().to_string(),
-                        version: match req_ref.version() {
-                            actix_web::http::Version::HTTP_10 => "HTTP/1.0".into(),
-                            actix_web::http::Version::HTTP_2 => "HTTP/2".into(),
-                            actix_web::http::Version::HTTP_3 => "HTTP/3".into(),
-                            actix_web::http::Version::HTTP_09 => "HTTP/0.9".into(),
-                            _ => "HTTP/1.1".into(),
-                        },
-                        headers: req_ref.headers().iter()
-                            .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
-                            .collect(),
-                    }
+                    let version = match req_ref.version() {
+                        actix_web::http::Version::HTTP_10 => "HTTP/1.0".into(),
+                        actix_web::http::Version::HTTP_2 => "HTTP/2".into(),
+                        actix_web::http::Version::HTTP_3 => "HTTP/3".into(),
+                        actix_web::http::Version::HTTP_09 => "HTTP/0.9".into(),
+                        _ => "HTTP/1.1".into(),
+                    };
+
+                    let headers = req_ref.headers().iter()
+                        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+                        .collect();
+
+                    LYServerHTTPRequest::new(
+                        req_ref.method().to_string(),
+                        req_ref.uri().to_string(),
+                        version,
+                        headers,
+                        None
+                    )
                 };
     
                 let msg = shared_plugin_data
@@ -91,7 +96,7 @@ where
                 if let Some(reply) = shared_plugin_data
                     .wait_until_event(
                         |event| event.event_type == "http_response" && event.event_id == msg_id,
-                        Duration::from_secs(3),
+                        Duration::from_secs(5),
                     )
                     .await
                 {
@@ -109,7 +114,14 @@ where
                         builder.insert_header((k, v));
                     }
 
-                    builder.insert_header(("x-lyserver-plugin-id", reply.event_sender.to_string()));
+                    let plugin_id = reply.event_sender.to_string();
+                    if let Some(handled_by_plugin) = shared_plugin_data.app_shared_data.get_plugin_metadata_by_id(&plugin_id).await {
+                        builder.insert_header(("x-lyserver-plugin-id", handled_by_plugin.id));
+                        builder.insert_header(("x-lyserver-plugin-version", handled_by_plugin.version));
+                        builder.insert_header(("x-lyserver-plugin-name", handled_by_plugin.name));
+                    } else {
+                        log::warn!("Plugin ID {} not found in shared data", plugin_id);
+                    }
     
                     let final_resp = builder.body(http_resp.body).map_into_boxed_body();
                     let response = ServiceResponse::new(req_for_response.request().clone(), final_resp);
