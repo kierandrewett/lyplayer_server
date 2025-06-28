@@ -1,8 +1,12 @@
 use std::{collections::HashMap};
 use bytes::Bytes;
 use path_tree::PathTree;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::{json, Value};
+
+use crate::router::LYServerHTTPRoute;
+
+pub mod router;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LYServerHTTPResponse {
@@ -64,13 +68,6 @@ impl LYServerHTTPResponseBuilder {
     }
 }
 
-pub struct LYServerHTTPRouteMatch {
-    pub method: String,
-    pub uri: String,
-    pub requested_uri: String,
-    pub params: HashMap<String, String>,
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LYServerHTTPRequest {
     pub method: String,
@@ -93,24 +90,29 @@ impl LYServerHTTPRequest {
         }
     }
 
-    pub fn match_request(&self, method: &str, uri: &str) -> Option<LYServerHTTPRouteMatch> {
-        if !self.method.eq_ignore_ascii_case(method) {
+    pub fn match_request(&self, method: &str, uri: &str) -> Option<LYServerHTTPRoute> {
+        LYServerHTTPRequest::static_match_request(self.clone(), method, uri)
+    }
+
+    pub fn static_match_request(request: Self, method: &str, uri: &str) -> Option<LYServerHTTPRoute> {
+        if !request.method.eq_ignore_ascii_case(method) {
             return None;
         }
 
         let mut tree = PathTree::new();
         let _ = tree.insert(uri, 0);
-        if let Some((_, url)) = tree.find(&self.uri) {
+        if let Some((_, url)) = tree.find(&request.uri) {
             let params = url.params()
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect();
 
-            Some(LYServerHTTPRouteMatch {
-                method: self.method.clone(),
+            Some(LYServerHTTPRoute {
+                method: request.method.clone(),
                 uri: uri.to_string(),
-                requested_uri: self.uri.clone(),
+                requested_uri: request.uri.clone(),
                 params,
+                request: request.clone(),
             })
         } else {
             None
@@ -139,5 +141,16 @@ impl LYServerHTTPRequest {
     pub fn not_found_response(&self) -> LYServerHTTPResponse {
         self.build_error_response(404, "Page or resource not found")
             .build()
+    }
+
+    pub fn body(&self) -> Option<Bytes> {
+        self.body.as_ref().map(|b| Bytes::from(b.clone()))
+    }
+
+    pub fn body_json<T: DeserializeOwned>(&self) -> anyhow::Result<T> {
+        match &self.body {
+            Some(body) => serde_json::from_slice(body).map_err(anyhow::Error::from),
+            None => Err(anyhow::Error::msg("No body available")),
+        }
     }
 }

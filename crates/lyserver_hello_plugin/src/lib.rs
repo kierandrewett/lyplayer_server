@@ -1,6 +1,6 @@
 pub use lyserver_plugin_wasm_runtime::alloc;
 
-use lyserver_plugin_wasm_runtime::{http::LYServerHTTPRequest, ipc::{self, LYServerMessageEvent}, log};
+use lyserver_plugin_wasm_runtime::{http::{router::LYServerHTTPRouter, LYServerHTTPRequest}, ipc::{self, LYServerMessageEvent}, log};
 
 #[unsafe(no_mangle)]
 extern "C" fn lyserver_plugin_init() {

@@ -1854,6 +1854,7 @@ dependencies = [
 name = "lyserver_http_shared"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bytes",
  "path-tree",
  "serde",

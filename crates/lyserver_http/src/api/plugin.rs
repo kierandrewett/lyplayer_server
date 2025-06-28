@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, task::{Context, Poll}, time::Duration};
 
-use actix_web::{body::BoxBody, dev::{Service, ServiceRequest, ServiceResponse, Transform}, http::StatusCode, web, Error, HttpMessage};
-use futures_util::future::{ok, LocalBoxFuture, Ready};
+use actix_web::{body::BoxBody, dev::{Service, ServiceRequest, ServiceResponse, Transform}, http::StatusCode, web::{self, BytesMut}, Error, HttpMessage};
+use futures_util::{future::{ok, LocalBoxFuture, Ready}, StreamExt};
 use lyserver_http_shared::{LYServerHTTPRequest, LYServerHTTPResponse};
 use lyserver_messaging_shared::LYServerMessageEventTarget;
 use lyserver_plugin_shared_data::LYServerPluginSharedData;
@@ -43,39 +43,45 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let (req_head, req_payload) = req.into_parts();
-    
-        let req_for_response = ServiceRequest::from_parts(req_head, req_payload);
-        let shared_plugin_data_opt = req_for_response.app_data::<web::Data<LYServerPluginSharedData>>().cloned();
+        let (req_head, mut req_payload) = req.into_parts();
         let service = Arc::clone(&self.service);
-
-        log::info!("Request: {} {} {:?}", req_for_response.method(), req_for_response.uri(), req_for_response.version());
     
         Box::pin(async move {
-            let plugin_response: anyhow::Result<ServiceResponse> = if let Some(shared_plugin_data) = shared_plugin_data_opt {
-                let http_req = {
-                    let req_ref = req_for_response.request();
+            let mut body_bytes = BytesMut::new();
+            while let Some(chunk) = req_payload.next().await {
+                body_bytes.extend_from_slice(&chunk?);
+            }
     
-                    let version = match req_ref.version() {
-                        actix_web::http::Version::HTTP_10 => "HTTP/1.0".into(),
-                        actix_web::http::Version::HTTP_2 => "HTTP/2".into(),
-                        actix_web::http::Version::HTTP_3 => "HTTP/3".into(),
-                        actix_web::http::Version::HTTP_09 => "HTTP/0.9".into(),
-                        _ => "HTTP/1.1".into(),
-                    };
-
-                    let headers = req_ref.headers().iter()
-                        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
-                        .collect();
-
-                    LYServerHTTPRequest::new(
-                        req_ref.method().to_string(),
-                        req_ref.uri().to_string(),
-                        version,
-                        headers,
-                        None
-                    )
-                };
+            let req_for_response = ServiceRequest::from_parts(req_head, req_payload);
+    
+            let shared_plugin_data_opt = req_for_response
+                .app_data::<web::Data<LYServerPluginSharedData>>()
+                .cloned();
+    
+            let plugin_response: anyhow::Result<ServiceResponse> = if let Some(shared_plugin_data) = shared_plugin_data_opt {
+                let req_ref = req_for_response.request();
+    
+                let version = match req_ref.version() {
+                    actix_web::http::Version::HTTP_10 => "HTTP/1.0",
+                    actix_web::http::Version::HTTP_2 => "HTTP/2",
+                    actix_web::http::Version::HTTP_3 => "HTTP/3",
+                    actix_web::http::Version::HTTP_09 => "HTTP/0.9",
+                    _ => "HTTP/1.1",
+                }.into();
+    
+                let headers = req_ref
+                    .headers()
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+                    .collect();
+    
+                let http_req = LYServerHTTPRequest::new(
+                    req_ref.method().to_string(),
+                    req_ref.uri().to_string(),
+                    version,
+                    headers,
+                    Some(body_bytes.to_vec()),
+                );
     
                 let msg = shared_plugin_data
                     .create_event("http_request", LYServerMessageEventTarget::All, http_req)
@@ -87,11 +93,10 @@ where
     
                 let msg_id = msg.event_id.clone();
     
-                shared_plugin_data.dispatch_event(msg)
-                    .map_err(|e| {
-                        log::error!("Failed to dispatch HTTP event: {}", e);
-                        actix_web::error::ErrorInternalServerError("dispatch err")
-                    })?;
+                shared_plugin_data.dispatch_event(msg).map_err(|e| {
+                    log::error!("Failed to dispatch HTTP event: {}", e);
+                    actix_web::error::ErrorInternalServerError("dispatch err")
+                })?;
     
                 if let Some(reply) = shared_plugin_data
                     .wait_until_event(
@@ -113,39 +118,38 @@ where
                     for (k, v) in http_resp.headers {
                         builder.insert_header((k, v));
                     }
-
+    
                     let plugin_id = reply.event_sender.to_string();
-                    if let Some(handled_by_plugin) = shared_plugin_data.app_shared_data.get_plugin_metadata_by_id(&plugin_id).await {
-                        builder.insert_header(("x-lyserver-plugin-id", handled_by_plugin.id));
-                        builder.insert_header(("x-lyserver-plugin-version", handled_by_plugin.version));
-                        builder.insert_header(("x-lyserver-plugin-name", handled_by_plugin.name));
-                    } else {
-                        log::warn!("Plugin ID {} not found in shared data", plugin_id);
+                    if let Some(plugin_meta) = shared_plugin_data
+                        .app_shared_data
+                        .get_plugin_metadata_by_id(&plugin_id)
+                        .await
+                    {
+                        builder.insert_header(("x-lyserver-plugin-id", plugin_meta.id));
+                        builder.insert_header(("x-lyserver-plugin-version", plugin_meta.version));
+                        builder.insert_header(("x-lyserver-plugin-name", plugin_meta.name));
                     }
     
                     let final_resp = builder.body(http_resp.body).map_into_boxed_body();
-                    let response = ServiceResponse::new(req_for_response.request().clone(), final_resp);
-                    Ok(response)
+                    Ok(ServiceResponse::new(
+                        req_for_response.request().clone(),
+                        final_resp,
+                    ))
                 } else {
-                    Err(anyhow::anyhow!("No response received from plugin").into())
+                    Err(anyhow::anyhow!("No plugin response").into())
                 }
             } else {
-                Err(anyhow::anyhow!("No shared plugin data found in request").into())                                                                                                               
+                Err(anyhow::anyhow!("Missing plugin data").into())
             };
-
+    
             let response = match plugin_response {
                 Ok(resp) => resp,
                 Err(e) => {
                     log::error!("Plugin middleware error: {}", e);
-                    log::warn!("Falling back to default service call due to plugin error.");
-
-                    let fallback = service.call(req_for_response).await?;
-                    fallback
+                    service.call(req_for_response).await?
                 }
             };
-
-            log::info!("Response: {} {} {:?} => {} ({})", response.request().method(), response.request().uri().to_string(), response.request().version(), response.status().as_u16(), response.headers().get("x-lyserver-plugin-id").map_or("no plugin", |v| v.to_str().unwrap()));
-
+    
             Ok(response)
         })
     }

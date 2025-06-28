@@ -4,7 +4,7 @@ use std::{net::SocketAddr, sync::{Arc}};
 
 use actix_web::{middleware::Logger, web, App, HttpServer};
 
-use lyserver_http_shared::LYServerHTTPRequest;
+use lyserver_http_shared::{router::LYServerHTTPRouter, LYServerHTTPRequest};
 use lyserver_plugin_common::{LYServerPlugin, LYServerPluginMetadata};
 use lyserver_plugin_shared_data::LYServerPluginSharedData;
 use lyserver_shared_data::{LYServerSharedData, LYServerSharedDataStatus as _};
@@ -60,27 +60,43 @@ impl LYServerPlugin for LYServerHTTPServerPlugin {
                     if event.event_type == "http_request" {
                         let request = event.data_as::<LYServerHTTPRequest>().expect("Failed to deserialize LYServerHTTPRequest");
 
-                        if request.match_request("GET", "/").is_some() {
-                            let response = request.build_response()
-                                .body("Welcome to LYServer")
-                                .build();
+                        let mut router = LYServerHTTPRouter::new();
 
+                        router.add_matcher("GET", "/", |route| {
+                            async move {
+                                let response = route.request.build_response()
+                                    .body("Welcome to LYServer")
+                                    .build();
+
+                                Ok(response)
+                            }
+                        });
+
+                        let plugin_shared_data_clone = Arc::clone(&self.plugin_shared_data);
+                        router.add_matcher("GET", "/status", move |route| {
+                            let plugin_shared_data_clone = Arc::clone(&plugin_shared_data_clone);
+
+                            async move {
+                                let server_status_data = plugin_shared_data_clone.app_shared_data.get_server_status().await;
+
+                                let response = route.request.build_response()
+                                    .json(server_status_data)
+                                    .build();
+                                
+                                Ok(response)
+                            }
+                        });
+
+                        router.add_matcher("GET", "/favicon.ico", |route| {
+                            async move {
+                                let response = route.request.not_found_response();
+                                Ok(response)
+                            }
+                        });
+
+                        if let Some(response) = router.respond(request).await {
                             self.plugin_shared_data.reply_event("http_response", event, response).await
-                                .expect("Failed to reply to HTTP request event");
-                        } else if request.match_request("GET", "/status").is_some() {
-                            let server_status_data = self.plugin_shared_data.app_shared_data.get_server_status().await;
-
-                            let response = request.build_response()
-                                .json(server_status_data)
-                                .build();
-
-                            self.plugin_shared_data.reply_event("http_response", event, response).await
-                                .expect("Failed to reply to HTTP request event");
-                        } else if request.match_request("GET", "/favicon.ico").is_some() {
-                            let response = request.not_found_response();
-
-                            self.plugin_shared_data.reply_event("http_response", event, response).await
-                                .expect("Failed to reply to HTTP request event");
+                                .expect("Failed to reply to HTTP response event");
                         }
                     }
                 }
