@@ -1,10 +1,10 @@
 use std::{
-    path::{Path, PathBuf},
-    time::Duration,
+    path::{Path, PathBuf}, sync::Arc, time::Duration
 };
 
 use lyserver_plugin_common::LYServerPluginMetadata;
 use serde::{Deserialize, Serialize};
+use sysinfo::{Pid, System};
 
 use crate::LYServerSharedData;
 
@@ -15,6 +15,8 @@ pub struct LYServerSharedDataStatusData {
     pub uptime: u128,
     pub start_time: u128,
     pub loaded_plugins: Vec<LYServerPluginMetadata>,
+    pub pid: u32,
+    pub used_memory: u64,
 }
 
 pub trait LYServerSharedDataStatus {
@@ -33,11 +35,18 @@ impl LYServerSharedDataStatus for LYServerSharedData {
         let start_ts = self.start_ts.clone();
         let loaded_plugins = self.loaded_plugins.clone();
 
+        let system_clone = Arc::clone(&self.system);
+        let pid_clone = self.pid.clone();
+
         Box::pin(async move {
             let loaded_plugins = loaded_plugins.read().await
                 .iter()
                 .map(|(_, metadata, _)| metadata.clone())
                 .collect::<Vec<LYServerPluginMetadata>>();
+
+            let system = system_clone.read().await;
+            let proc = system.process(Pid::from(pid_clone as usize)).unwrap();
+            let used_memory = proc.memory();
 
             LYServerSharedDataStatusData {
                 data_dir: maybe_canonicalized_data_dir,
@@ -48,6 +57,8 @@ impl LYServerSharedDataStatus for LYServerSharedData {
                     .unwrap_or(Duration::from_secs(0))
                     .as_secs() as u128,
                 loaded_plugins,
+                pid: pid_clone,
+                used_memory,
             }
         })
     }

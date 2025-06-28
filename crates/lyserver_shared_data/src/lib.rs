@@ -12,6 +12,7 @@ pub use messaging::{LYServerSharedDataMessaging};
 pub use database::{LYServerSharedDataDatabase};
 
 use lyserver_plugin_common::{LYServerPlugin, LYServerPluginMetadata};
+use sysinfo::System;
 use tokio::sync::{broadcast::Sender, mpsc::{UnboundedReceiver, UnboundedSender}, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 
@@ -59,11 +60,17 @@ pub struct LYServerSharedData {
     pub messaging_global_tx: Arc<Sender<LYServerMessageEvent>>,
     pub messaging_plugin_tx: Arc<RwLock<HashMap<String, Arc<RwLock<Sender<LYServerMessageEvent>>>>>>,
     pub consumed_message_ids: Arc<RwLock<HashSet<String>>>,
+
+    pub pid: u32,
+    pub system: Arc<RwLock<System>>,
 }
 
 impl LYServerSharedData {
     fn new(bind_address: SocketAddr, data_dir: PathBuf) -> Self {
         let (tx, _) = tokio::sync::broadcast::channel::<LYServerMessageEvent>(512);
+
+        let pid = std::process::id();
+        let system = Arc::new(RwLock::new(System::new_all()));
 
         let data = Self {
             bind_address,
@@ -80,7 +87,22 @@ impl LYServerSharedData {
             messaging_global_tx: Arc::new(tx),
             messaging_plugin_tx: Arc::new(HashMap::new().into()),
             consumed_message_ids: Arc::new(RwLock::new(HashSet::new())),
+
+            pid,
+            system,
         };
+
+        let system_clone = Arc::clone(&data.system);
+        tokio::spawn(async move {
+            loop {
+                {
+                    let mut sys = system_clone.write().await;
+                    sys.refresh_all();
+                }
+
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        });
 
         log::info!("Welcome to LYServer v{}.", data.version);
         log::info!("Server Options:");
