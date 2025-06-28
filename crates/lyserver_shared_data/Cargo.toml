@@ -1,0 +1,18 @@
+[package]
+name = "lyserver_shared_data"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tokio-util = { workspace = true }
+
+lyserver_plugin_common = { path = "../lyserver_plugin_common" }
+lyserver_messaging_shared = { path = "../lyserver_messaging_shared" }

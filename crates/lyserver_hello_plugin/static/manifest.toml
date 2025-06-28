@@ -1,0 +1,6 @@
+id = "hello@lyserver"
+name = "lyserver_hello_plugin"
+description = "Hello plugin for LYServer"
+version = "0.1.0"
+author = "LYServer"
+entrypoint = "lyserver_hello_plugin.wasm"

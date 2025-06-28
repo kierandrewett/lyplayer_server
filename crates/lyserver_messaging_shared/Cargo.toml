@@ -1,0 +1,10 @@
+[package]
+name = "lyserver_messaging_shared"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lyserver_random_id = { path = "../lyserver_random_id" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }

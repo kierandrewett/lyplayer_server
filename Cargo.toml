@@ -1,0 +1,37 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/lyserver_database",
+    "crates/lyserver",
+    "crates/lyserver_hello_plugin",
+    "crates/lyserver_http",
+    "crates/lyserver_player",
+    "crates/lyserver_plugin_common",
+    "crates/lyserver_plugin_wasm_loader",
+    "crates/lyserver_plugin_wasm_runtime",
+    "crates/lyserver_shared_data",
+    "crates/lyserver_preferences",
+    "crates/lyserver_plugin_shared_data",
+    "crates/lyserver_http_shared",
+    "crates/lyserver_messaging_shared",
+    "crates/lyserver_random_id",
+]
+default-members = ["crates/lyserver"]
+
+[workspace.dependencies]
+actix-web = "4"
+actix-rt = "2"
+anyhow = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+serde_millis = "0.1"
+env_logger = "0.11.8"
+log = "0.4.27"
+tokio = { version = "1.45.1", features = ["full"] }
+async-trait = { version = "0.1" }
+futures = "0.3"
+clap = { version = "4.5", features = ["derive"] }
+toml = "0.8"
+tokio-util = { version = "0.7", features = ["codec"] }
+chrono = { version = "0.4", features = ["serde"] }
+futures-util = "0.3"

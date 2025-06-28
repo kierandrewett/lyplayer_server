@@ -1,0 +1,10 @@
+[package]
+name = "lyserver_plugin_wasm_runtime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lyserver_messaging_shared = { path = "../lyserver_messaging_shared" }
+lyserver_http_shared = { path = "../lyserver_http_shared" }
+serde = { workspace = true }
+serde_json = { workspace = true }
