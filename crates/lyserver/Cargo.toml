@@ -17,6 +17,7 @@ futures = { workspace = true }
 toml = { workspace = true }
 ctrlc = "3"
 tokio-util = { workspace = true }
+console-subscriber = { workspace = true }
 
 lyserver_http = { path = "../lyserver_http" }
 lyserver_database = { path = "../lyserver_database" }

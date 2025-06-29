@@ -22,6 +22,8 @@ extern "C" fn lyserver_plugin_init() {
                 ipc::tx(&handled_message)
                     .expect("Failed to send HTTP request handled message");
 
+                // std::thread::sleep(std::time::Duration::from_millis(1000));
+
                 log::info!("Handling request for player.mp3");
 
                 let player_bytes = include_bytes!("../static/player.mp3");
@@ -30,6 +32,8 @@ extern "C" fn lyserver_plugin_init() {
                     .body(player_bytes)
                     .build();
 
+                // std::thread::sleep(std::time::Duration::from_millis(1000));
+
                 let reply_message = message.reply("http_response", "media@lyserver".into(), response)
                     .expect("Failed to create reply message");
 
@@ -37,7 +41,7 @@ extern "C" fn lyserver_plugin_init() {
                     .expect("Failed to send HTTP response");
             }
         }
-    }
+}
 }
 
 #[unsafe(no_mangle)]

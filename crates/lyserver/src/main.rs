@@ -10,6 +10,8 @@ use crate::{server::LYServer};
 
 #[tokio::main]
 async fn main() {
+    console_subscriber::init();
+
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)
         .init();

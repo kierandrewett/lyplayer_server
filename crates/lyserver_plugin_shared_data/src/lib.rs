@@ -16,7 +16,7 @@ pub struct LYServerPluginSharedData {
 
 impl LYServerPluginSharedData {
     pub fn new(shared_data: Arc<LYServerSharedData>) -> Self {
-        let (tx, _) = tokio::sync::broadcast::channel::<LYServerMessageEvent>(512);
+        let (tx, _) = tokio::sync::broadcast::channel::<LYServerMessageEvent>(1024);
 
         Self {
             app_shared_data: shared_data,
@@ -42,8 +42,32 @@ impl LYServerPluginSharedData {
         *self.rx_sync.lock().unwrap() = Some(rx_sync);
 
         self.app_shared_data
-            .register_plugin_messaging(plugin_id, self.tx.clone())
-            .await
+            .register_plugin_messaging(plugin_id.clone(), self.tx.clone())
+            .await?;
+
+        let tx_clone = Arc::clone(&self.tx);
+        let plugin_id_clone = plugin_id.clone();
+
+        let rx_lock = tx_clone.read().await;
+        let mut rx = rx_lock.subscribe();
+
+        tokio::spawn(async move {
+            log::error!("SPAWNED MESSAGING TOKIO TASK FOR PLUGIN: {}", plugin_id_clone);
+
+            loop {
+                if let Ok(event) = rx.recv().await {
+                    log::debug!("[Plugin Messaging SHARED DATA RUNIME: {}] Received event '{}' ({}): {} -> {}",
+                        plugin_id_clone,
+                        event.event_type, event.event_id,
+                        event.event_sender.to_string(), event.event_target.to_string()
+                    );
+                } else {
+                    log::warn!("[Plugin Messaging SHARED DATA RUNIME: {}] Receiver closed, stopping event loop", plugin_id_clone);
+                }
+            }
+        });
+
+        Ok(())
     }
 
     pub fn dispatch_event(&self, event: LYServerMessageEvent) -> anyhow::Result<()> {
@@ -87,8 +111,9 @@ impl LYServerPluginSharedData {
     
     pub async fn receive_event(&self) -> Option<LYServerMessageEvent> {
         let mut rx = {
-            let lock = self.tx.read().await;
-            lock.subscribe()
+            let tx_clone = Arc::clone(&self.tx);
+            let rx_lock = tx_clone.read().await;
+            rx_lock.subscribe()
         };
     
         match rx.recv().await {
@@ -127,41 +152,32 @@ impl LYServerPluginSharedData {
         predicate: impl Fn(&LYServerMessageEvent) -> bool + Send + 'static,
         timeout: Duration,
     ) -> Option<LYServerMessageEvent> {
-        let deadline = tokio::time::Instant::now() + timeout;
-    
         let mut rx = {
             let tx_clone = Arc::clone(&self.tx);
             let rx_lock = tx_clone.read().await;
             rx_lock.subscribe()
         };
-
-        tokio::spawn(async move {
+    
+        let fut = async move {
             loop {
-                let now = tokio::time::Instant::now();
-                if now >= deadline {
-                    return None;
-                }
-        
-                let remaining = deadline - now;
-        
-                let maybe_event = rx.try_recv();
-
-                match maybe_event {
+                match rx.recv().await {
                     Ok(event) => {
                         if predicate(&event) {
                             return Some(event);
                         }
                     }
-                    Err(tokio::sync::broadcast::error::TryRecvError::Lagged(n)) => {
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                         log::warn!("Missed {} messages in plugin stream", n);
                     }
-                    Err(_) => {}
+                    Err(_) => {
+                        return None; 
+                    }
                 }
-
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             }
-        }).await.expect("Failed to wait for event")
-    }    
+        };
+    
+        tokio::time::timeout(timeout, fut).await.ok().flatten()
+    }
 
     pub async fn dispatch_init_event(&self) -> anyhow::Result<()> {
         let plugin_id = self.plugin_id

@@ -20,4 +20,4 @@ cp target/wasm32-wasip1/release/lyserver_media_plugin.wasm ./server_data/plugins
 
 # build + run
 
-RUST_BACKTRACE=1 RUST_LOG=debug,lyserver=debug,actix_web::middleware::Logger=debug cargo run -- --data-dir ./server_data
+RUST_BACKTRACE=1 RUSTFLAGS="--cfg tokio_unstable" RUST_LOG=debug,lyserver=debug,actix_web::middleware::Logger=debug cargo run -- --data-dir ./server_data
