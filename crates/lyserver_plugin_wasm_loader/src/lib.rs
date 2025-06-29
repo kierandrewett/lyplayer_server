@@ -12,6 +12,7 @@ use crate::plugin_impl::LYServerWASMPlugin;
 
 pub const LYSERVER_PLUGIN_ABI_INIT_METHOD: &str = "lyserver_plugin_init";
 pub const LYSERVER_PLUGIN_ABI_DESTROY_METHOD: &str = "lyserver_plugin_destroy";
+pub const LYSERVER_PLUGIN_ABI_HANDLE_MESSAGE_EVENT_METHOD: &str = "lyserver_plugin_handle_message_event";
 pub const LYSERVER_PLUGIN_ABI_STDOUT_WRITE_METHOD: &str = "lyserver_plugin_stdout_write";
 pub const LYSERVER_PLUGIN_ABI_LOG_INFO_METHOD: &str = "lyserver_plugin_log_info";
 pub const LYSERVER_PLUGIN_ABI_LOG_WARN_METHOD: &str = "lyserver_plugin_log_warn";
@@ -192,11 +193,15 @@ pub fn mutate_linker<'a>(
                 let end = start + len as usize;
                 let data = memory.data(&caller)[start..end].to_vec();
 
-                let result_code: u32 = match plugin_shared_data_clone.dispatch_raw_event(data) {
-                    Ok(_) => 0,
-                    Err(_) => 1,
-                };
-    
+                let result_code: u32 = tokio::task::spawn_blocking(move || {
+                    let result_code: u32 = match plugin_shared_data_clone.dispatch_raw_event(data) {
+                        Ok(_) => 0,
+                        Err(_) => 1,
+                    };
+
+                    return result_code;
+                }).await?;
+
                 let ret_ptr = ret_ptr as usize;
                 let ret_bytes = result_code.to_le_bytes();
                 memory.data_mut(&mut caller)[ret_ptr..ret_ptr + 4]

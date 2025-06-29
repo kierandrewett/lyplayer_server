@@ -95,27 +95,23 @@ impl LYServerPlugin for LYServerHTTPServerPlugin {
 
         log::info!("LYServer is started at http://{}.", bind_addr);
     
-        tokio::select! {
-            res = server.run() => {
-                return res.map_err(|e| anyhow::anyhow!("Failed to start HTTP server: {}", e));
-            },
+        server.run().await?;
+        
+        Ok(())
+    }
 
-            _ = async {
-                while let Some(event) = self.plugin_shared_data.receive_event().await {
-                    if event.event_type == "http_request" {
-                        let plugin_shared_data_clone = Arc::clone(&self.plugin_shared_data);
+    async fn handle_message_event(&self, event: LYServerMessageEvent) -> anyhow::Result<()> {
+        if event.event_type == "http_request" {
+            let plugin_shared_data_clone = Arc::clone(&self.plugin_shared_data);
 
-                        tokio::spawn(async {
-                            if let Err(e) = Self::handle_http_request(plugin_shared_data_clone, event).await {
-                                log::error!("Error handling HTTP event: {}", e);
-                            }
-                        });
-                    }
-                }
-            } => {
-                return Ok(());
+            if let Err(e) = Self::handle_http_request(plugin_shared_data_clone, event).await {
+                log::error!("Error handling HTTP event: {}", e);
             }
+        } else {
+            log::debug!("Received event: {} from {}", event.event_type, event.event_sender.to_string());
         }
+
+        Ok(())
     }
 
     async fn destroy(&self) -> anyhow::Result<()> {

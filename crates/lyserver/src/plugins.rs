@@ -51,45 +51,48 @@ impl LYServerPluginManager {
 
                     log::info!("Starting plugin global messaging loop...");
 
-                    while let Some(event) = shared_data_clone.receive_event().await {
-                        log::debug!("!!!!!!!!!!!!!!!!!!!! Received event: {}", event.event_type);
-
-                        let shared_data_clone = Arc::clone(&shared_data_clone);
-
-                        tokio::spawn(async move {
-                            log::debug!("got event: {}", event.event_type);
-                            let plugin_receivers = shared_data_clone.messaging_plugin_tx.read().await
-                                .iter()
-                                .filter_map(|(plugin_id, tx)| {
-                                    if event.event_target.is_all() || event.event_target.plugin_id() == Some(plugin_id.to_string()) {
-                                        Some(tx.clone())
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect::<Vec<_>>();
-                            log::debug!("got plugin receivers: {}", plugin_receivers.len());
+                    loop {
+                        if let Some(event) = shared_data_clone.receive_event().await {
+                            log::debug!("!!!!!!!!!!!!!!!!!!!! Received event: {}", event.event_type);
     
-                            let plugin_receiver_count = plugin_receivers.len();
+                            let shared_data_clone = Arc::clone(&shared_data_clone);
     
-                            log::debug!("[Plugin Messaging] Broadcasting event to {} plugins '{}' ({}): {} -> {}", plugin_receiver_count, event.event_type, event.event_id, event.event_sender.to_string(), event.event_target.to_string());
-    
-                            let event_clone = event.clone();
-                            for tx in plugin_receivers.iter() {
-                                log::debug!("iter plugin tx");
-    
-                                let tx_clone = Arc::clone(tx);
-                                let event_clone = event_clone.clone();
-    
-                                tokio::spawn(async move {
-                                    log::debug!("pub plugin event");
-    
-                                    let tx = tx_clone.write().await;
-                
-                                    let _ = tx.send(event_clone.clone());
-                                });
-                            }
-                        });
+                            tokio::spawn(async move {
+                                log::debug!("got event: {}", event.event_type);
+                                let plugin_receivers = shared_data_clone.messaging_plugin_tx.read().await
+                                    .iter()
+                                    .filter_map(|(plugin_id, tx)| {
+                                        if event.event_target.is_all() || event.event_target.plugin_id() == Some(plugin_id.to_string()) {
+                                            Some(tx.clone())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect::<Vec<_>>();
+                                log::debug!("got plugin receivers: {}", plugin_receivers.len());
+        
+                                let plugin_receiver_count = plugin_receivers.len();
+        
+                                log::debug!("[Plugin Messaging] Broadcasting event to {} plugins '{}' ({}): {} -> {}", plugin_receiver_count, event.event_type, event.event_id, event.event_sender.to_string(), event.event_target.to_string());
+        
+                                let event_clone = event.clone();
+                                for tx in plugin_receivers.iter() {
+                                    log::debug!("iter plugin tx");
+        
+                                    let tx_clone = Arc::clone(tx);
+                                    let event_clone = event_clone.clone();
+        
+                                    tokio::spawn(async move {
+                                        log::debug!("pub plugin event");
+        
+                                        let _ = tx_clone.send(event_clone.clone());
+                                    });
+                                }
+                            });
+                        } else {
+                            log::debug!("[Plugin Messaging] Channel closed, stopping global messaging loop");
+                            break;
+                        }
                     }
 
                     return Ok::<(), anyhow::Error>(());

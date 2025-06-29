@@ -58,7 +58,7 @@ pub struct LYServerSharedData {
     pub plugin_message: Arc<Mutex<Option<String>>>,
 
     pub messaging_global_tx: Arc<Sender<LYServerMessageEvent>>,
-    pub messaging_plugin_tx: Arc<RwLock<HashMap<String, Arc<RwLock<Sender<LYServerMessageEvent>>>>>>,
+    pub messaging_plugin_tx: Arc<RwLock<HashMap<String, Arc<Sender<LYServerMessageEvent>>>>>,
     pub consumed_message_ids: Arc<RwLock<HashSet<String>>>,
 
     pub pid: u32,

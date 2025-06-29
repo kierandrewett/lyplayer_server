@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use lyserver_messaging_shared::LYServerMessageEvent;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ pub trait LYServerSharedDataMessaging {
     async fn register_plugin_messaging(
         &self,
         plugin_id: String,
-        tx: Arc<RwLock<Sender<LYServerMessageEvent>>>,
+        tx: Arc<Sender<LYServerMessageEvent>>,
     ) -> anyhow::Result<()>;
     async fn receive_event(&self) -> Option<LYServerMessageEvent>;
 }
@@ -21,17 +21,19 @@ pub trait LYServerSharedDataMessaging {
 #[async_trait::async_trait]
 impl LYServerSharedDataMessaging for LYServerSharedData {
     fn dispatch_event(&self, event: LYServerMessageEvent) -> anyhow::Result<()> {
-        self.messaging_global_tx
+        let messaging_global_tx_clone = Arc::clone(&self.messaging_global_tx);
+
+        messaging_global_tx_clone
             .send(event)
             .map_err(|e| anyhow::anyhow!("Failed to send global event: {}", e))?;
-
+        
         Ok(())
     }
 
     async fn register_plugin_messaging(
         &self,
         plugin_id: String,
-        tx: Arc<RwLock<Sender<LYServerMessageEvent>>>,
+        tx: Arc<Sender<LYServerMessageEvent>>,
     ) -> anyhow::Result<()> {
         log::info!("Registering plugin messaging for '{}'", plugin_id);
 

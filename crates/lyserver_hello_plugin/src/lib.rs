@@ -32,6 +32,12 @@ extern "C" fn lyserver_plugin_init() {
 }
 
 #[unsafe(no_mangle)]
+extern "C" fn lyserver_plugin_handle_message_event(message_ptr: *mut u8, message_len: *mut u8) {
+    let message = ipc::deserialize_event(message_ptr, message_len)
+        .expect("Failed to deserialize LYServerMessageEvent");
+}
+
+#[unsafe(no_mangle)]
 extern "C" fn lyserver_plugin_destroy() {
     log::error!("💀 Goodbye from LYServer Hello Plugin!");
 }

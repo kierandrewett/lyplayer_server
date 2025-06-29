@@ -16,3 +16,4 @@ lyserver_shared_data = { path = "../lyserver_shared_data" }
 lyserver_plugin_common = { path = "../lyserver_plugin_common" }
 lyserver_plugin_shared_data = { path = "../lyserver_plugin_shared_data" }
 lyserver_http_shared = { path = "../lyserver_http_shared" }
+lyserver_messaging_shared = { path = "../lyserver_messaging_shared" }

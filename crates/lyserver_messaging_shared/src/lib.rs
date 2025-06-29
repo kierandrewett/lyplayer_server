@@ -77,7 +77,7 @@ impl TryFrom<Value> for LYServerMessageEvent {
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LYServerMessageEventTarget {
     All,
     Plugin(String),

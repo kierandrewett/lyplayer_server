@@ -55,3 +55,21 @@ pub fn tx(msg: &LYServerMessageEvent) -> Result<(), String> {
         Ok(())
     }
 }
+
+pub fn deserialize_event(message_ptr: *mut u8, message_len: *mut u8) -> Result<LYServerMessageEvent, String> {
+    let ptr: i32 = message_ptr as i32;
+    let len: i32 = message_len as i32;
+
+    let slice = unsafe {
+        if ptr == 0 || len == 0 {
+            return Err("Invalid pointer or length".to_string());
+        }
+
+        std::slice::from_raw_parts(ptr as *const u8, len as usize)
+    };
+
+    match serde_cbor::from_slice::<LYServerMessageEvent>(&slice) {
+        Ok(event) => return Ok(event),
+        Err(e) => return Err(format!("Failed to deserialize event: {}", e)),
+    }
+}

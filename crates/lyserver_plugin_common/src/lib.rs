@@ -1,3 +1,4 @@
+use lyserver_messaging_shared::LYServerMessageEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -74,4 +75,7 @@ pub trait LYServerPlugin: Send + Sync {
     async fn destroy(&self) -> anyhow::Result<()>;
     async fn invoke(&self, method: &str, args: Vec<String>) -> anyhow::Result<Value>;
     async fn receive(&self, method: &str, args: Vec<String>) -> anyhow::Result<Value>;
+    async fn handle_message_event(&self, _: LYServerMessageEvent) -> anyhow::Result<()> {
+        Ok(())
+    }
 }

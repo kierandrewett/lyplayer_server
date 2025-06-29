@@ -111,13 +111,13 @@ where
                         )
                         .await
                     {
-                        log::debug!("Plugin '{}' handling HTTP request event: {}", reply.event_sender.to_string(), reply.event_id);
+                        log::warn!("(!!!) Plugin '{}' handling HTTP request event: {}", reply.event_sender.to_string(), reply.event_id);
 
                         let msg_id_clone = msg_id.clone();
 
                         if let Some(reply) = shared_plugin_data_clone
                             .wait_until_event(
-                                move |event| event.event_type == "http_response" && event.event_id == msg_id_clone.clone(),
+                                move |event| event.event_type == "http_response" && event.event_id == msg_id_clone.clone() && event.event_sender == reply.event_sender,
                                 Duration::from_secs(60),
                             )
                             .await
