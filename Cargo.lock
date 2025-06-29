@@ -1859,7 +1859,15 @@ dependencies = [
  "path-tree",
  "serde",
  "serde_json",
- "tokio",
+]
+
+[[package]]
+name = "lyserver_media_plugin"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "lyserver_plugin_wasm_runtime",
 ]
 
 [[package]]

@@ -17,6 +17,11 @@ pub struct LYServerSharedDataStatusData {
     pub loaded_plugins: Vec<LYServerPluginMetadata>,
     pub pid: u32,
     pub used_memory: u64,
+    pub cpu_count: usize,
+    pub platform: String,
+    pub os: String,
+    pub os_version: String,
+    pub os_kernel_version: String,
 }
 
 pub trait LYServerSharedDataStatus {
@@ -36,7 +41,12 @@ impl LYServerSharedDataStatus for LYServerSharedData {
         let loaded_plugins = self.loaded_plugins.clone();
 
         let system_clone = Arc::clone(&self.system);
+        let system_cpu_count_clone = self.system_cpu_count.clone();
         let pid_clone = self.pid.clone();
+        let platform_clone = self.platform.clone();
+        let os_clone = self.os.clone();
+        let os_version_clone = self.os_version.clone();
+        let os_kernel_version_clone = self.os_kernel_version.clone();
 
         Box::pin(async move {
             let loaded_plugins = loaded_plugins.read().await
@@ -59,6 +69,11 @@ impl LYServerSharedDataStatus for LYServerSharedData {
                 loaded_plugins,
                 pid: pid_clone,
                 used_memory,
+                cpu_count: system_cpu_count_clone,
+                platform: platform_clone,
+                os: os_clone,
+                os_version: os_version_clone,
+                os_kernel_version: os_kernel_version_clone,
             }
         })
     }

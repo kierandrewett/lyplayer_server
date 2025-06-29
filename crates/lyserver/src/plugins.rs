@@ -52,17 +52,44 @@ impl LYServerPluginManager {
                     log::info!("Starting plugin global messaging loop...");
 
                     while let Some(event) = shared_data_clone.receive_event().await {
-                        log::debug!("Broadcasting global event '{}': {} -> {}", event.event_type, event.event_sender.to_string(), event.event_target.to_string());
+                        log::debug!("!!!!!!!!!!!!!!!!!!!! Received event: {}", event.event_type);
 
-                        let plugin_tx_map = shared_data_clone.messaging_plugin_tx.write().await;
-            
-                        for (plugin_id, tx) in plugin_tx_map.iter() {
-                            let tx = tx.write().await;
-            
-                            if let Err(e) = tx.send(event.clone()) {
-                                log::warn!("Plugin '{}' is not handling server events.", plugin_id);
+                        let shared_data_clone = Arc::clone(&shared_data_clone);
+
+                        tokio::spawn(async move {
+                            log::debug!("got event: {}", event.event_type);
+                            let plugin_receivers = shared_data_clone.messaging_plugin_tx.read().await
+                                .iter()
+                                .filter_map(|(plugin_id, tx)| {
+                                    if event.event_target.is_all() || event.event_target.plugin_id() == Some(plugin_id.to_string()) {
+                                        Some(tx.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            log::debug!("got plugin receivers: {}", plugin_receivers.len());
+    
+                            let plugin_receiver_count = plugin_receivers.len();
+    
+                            log::debug!("[Plugin Messaging] Broadcasting event to {} plugins '{}' ({}): {} -> {}", plugin_receiver_count, event.event_type, event.event_id, event.event_sender.to_string(), event.event_target.to_string());
+    
+                            let event_clone = event.clone();
+                            for tx in plugin_receivers.iter() {
+                                log::debug!("iter plugin tx");
+    
+                                let tx_clone = Arc::clone(tx);
+                                let event_clone = event_clone.clone();
+    
+                                tokio::spawn(async move {
+                                    log::debug!("pub plugin event");
+    
+                                    let tx = tx_clone.write().await;
+                
+                                    let _ = tx.send(event_clone.clone());
+                                });
                             }
-                        }
+                        });
                     }
 
                     return Ok::<(), anyhow::Error>(());
@@ -165,7 +192,7 @@ impl LYServerPluginManager {
         let wasm_loader_consumer = Arc::clone(&self.wasm_loader);
 
         self
-            .load_plugin(|plugin_shared_data| async move {
+            .load_plugin(plugin_metadata.id.clone(), |plugin_shared_data| async move {
                 let wasm_plugin = wasm_loader_consumer
                     .create_wasm_plugin_instance(&plugin_metadata, &wasm_full_path, plugin_shared_data)
                     .await
@@ -183,23 +210,27 @@ impl LYServerPluginManager {
             .await
     }
 
-    pub async fn load_plugin<F, Fut>(
+    pub async fn load_plugin<F, Fut, T: Into<String>>(
         &mut self,
+        plugin_id: T,
         constructor: F,
     ) -> anyhow::Result<LYServerPluginInstance, String>
     where
         F: FnOnce(Arc<LYServerPluginSharedData>) -> Fut,
-        Fut: Future<Output = Box<LYServerPluginInstance>>,
+        Fut: Future<Output = Box<LYServerPluginInstance>>
     {
         let shared_data = self.shared_data.clone();
-        let plugin_shared_data = LYServerPluginSharedData::new(shared_data.clone());
+        let mut plugin_shared_data = LYServerPluginSharedData::new(shared_data.clone());
+
+        let plugin_id = plugin_id.into();
+
+        plugin_shared_data.register_plugin_messaging(plugin_id.clone())
+            .await
+            .map_err(|e| format!("Failed to register plugin messaging for '{}': {}", plugin_id, e))?;
+
         let plugin_shared_data = Arc::new(plugin_shared_data);
         let plugin = constructor(plugin_shared_data.clone()).await;
         let plugin_metadata = plugin.metadata().clone();
-
-        plugin_shared_data.register_plugin_messaging(plugin_metadata.id.clone())
-            .await
-            .map_err(|e| format!("Failed to register plugin messaging for '{}': {}", plugin_metadata.id, e))?;
 
         let plugin_token = CancellationToken::new();
         let plugin_child_token = plugin_token.child_token();

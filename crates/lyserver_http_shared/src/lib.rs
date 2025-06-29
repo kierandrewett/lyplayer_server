@@ -13,7 +13,7 @@ pub struct LYServerHTTPResponse {
     pub request: LYServerHTTPRequest,
     pub status_code: u16,
     pub headers: HashMap<String, String>,
-    pub body: String,
+    pub body: Vec<u8>,
 }
 
 pub struct LYServerHTTPResponseBuilder {
@@ -27,7 +27,7 @@ impl LYServerHTTPResponseBuilder {
                 request,
                 status_code: 200,
                 headers: HashMap::new(),
-                body: String::new(),
+                body: Vec::new(),
             },
         }
     }
@@ -42,7 +42,7 @@ impl LYServerHTTPResponseBuilder {
         self
     }
 
-    pub fn body(mut self, body: impl Into<String>) -> Self {
+    pub fn body(mut self, body: impl Into<Vec<u8>>) -> Self {
         self.response.body = body.into();
         self
     }
@@ -50,12 +50,12 @@ impl LYServerHTTPResponseBuilder {
     pub fn json(mut self, data: impl Serialize) -> Self {
         match serde_json::to_string(&data) {
             Ok(json_body) => {
-                self.response.body = json_body;
+                self.response.body = json_body.into();
                 self.response.headers.insert("content-type".to_string(), "application/json".to_string());
             }
             Err(_) => {
                 self.response.status_code = 500; // Internal Server Error
-                self.response.body = "Failed to serialize JSON".to_string();
+                self.response.body = "Failed to serialize JSON".to_string().into();
             }
         }
         self

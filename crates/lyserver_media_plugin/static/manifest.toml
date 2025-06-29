@@ -1,0 +1,6 @@
+id = "media@lyserver"
+name = "lyserver_media_plugin"
+description = "Media plugin for LYServer"
+version = "0.1.0"
+author = "LYServer"
+wasm_entry_point = "lyserver_media_plugin.wasm"

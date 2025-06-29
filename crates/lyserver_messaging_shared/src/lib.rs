@@ -8,7 +8,7 @@ pub struct LYServerMessageEvent {
     pub event_type: String,
     pub event_target: LYServerMessageEventTarget,
     pub event_sender: LYServerMessageEventTarget,
-    pub data: Vec<u8>,
+    pub data: Vec<u8>
 }
 
 impl LYServerMessageEvent {
@@ -107,6 +107,29 @@ impl From<String> for LYServerMessageEventTarget {
 impl From<&str> for LYServerMessageEventTarget {
     fn from(s: &str) -> Self {
         LYServerMessageEventTarget::Plugin(s.to_string())
+    }
+}
+
+impl LYServerMessageEventTarget {
+    pub fn is_all(&self) -> bool {
+        // Some plugins pass "all", which gets incorrectly casted to Plugin("all"), so we need to check for that
+        matches!(self, LYServerMessageEventTarget::All) | matches!(self, LYServerMessageEventTarget::Plugin(id) if id == "all")
+    }
+
+    pub fn is_plugin(&self) -> bool {
+        matches!(self, LYServerMessageEventTarget::Plugin(_)) && !self.is_all()
+    }
+
+    pub fn plugin_id(&self) -> Option<String> {
+        if self.is_all() {
+            return None;
+        }
+
+        if let LYServerMessageEventTarget::Plugin(id) = self {
+            Some(id.clone())
+        } else {
+            None
+        }
     }
 }
 

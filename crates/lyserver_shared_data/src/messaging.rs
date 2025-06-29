@@ -45,7 +45,7 @@ impl LYServerSharedDataMessaging for LYServerSharedData {
         self.messaging_plugin_tx
             .write()
             .await
-            .insert(plugin_id, tx);
+            .insert(plugin_id.clone(), tx);
 
         Ok(())
     }
@@ -53,6 +53,12 @@ impl LYServerSharedDataMessaging for LYServerSharedData {
     async fn receive_event(&self) -> Option<LYServerMessageEvent> {
         let mut rx = self.messaging_global_tx.subscribe();
 
-        rx.recv().await.ok()
+        match rx.recv().await {
+            Ok(event) => Some(event),
+            Err(e) => {
+                log::warn!("Failed to receive event: {}", e);
+                None
+            }
+        }
     }
 }

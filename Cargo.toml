@@ -15,6 +15,7 @@ members = [
     "crates/lyserver_http_shared",
     "crates/lyserver_messaging_shared",
     "crates/lyserver_random_id",
+    "crates/lyserver_media_plugin",
 ]
 default-members = ["crates/lyserver"]
 

@@ -58,21 +58,21 @@ impl LYServer {
             res = async {
                 let mut locked_plugin_manager = plugin_manager_clone.lock().await;
 
-                if let Err(e) = locked_plugin_manager.load_plugin(|plugin_shared_data| async move {
+                if let Err(e) = locked_plugin_manager.load_plugin("database@lyserver.local", |plugin_shared_data| async move {
                     Box::new(LYServerDatabasePlugin::new(plugin_shared_data) as Arc<dyn LYServerPlugin + Send + Sync>)
                 }).await {
                     log::error!("Failed to load database plugin: {}", e);
                     return Err(anyhow::anyhow!("Failed to load database plugin"));
                 }
     
-                if let Err(e) = locked_plugin_manager.load_plugin(|plugin_shared_data| async move {
+                if let Err(e) = locked_plugin_manager.load_plugin("preferences@lyserver.local", |plugin_shared_data| async move {
                     Box::new(LYServerPreferencesPlugin::new(plugin_shared_data) as Arc<dyn LYServerPlugin + Send + Sync>)
                 }).await {
                     log::error!("Failed to load preferences plugin: {}", e);
                     return Err(anyhow::anyhow!("Failed to load preferences plugin"));
                 }
     
-                if let Err(e) = locked_plugin_manager.load_plugin(|plugin_shared_data| async move {
+                if let Err(e) = locked_plugin_manager.load_plugin("http@lyserver.local", |plugin_shared_data| async move {
                     Box::new(LYServerHTTPServerPlugin::new(plugin_shared_data) as Arc<dyn LYServerPlugin + Send + Sync>)
                 }).await {
                     log::error!("Failed to load HTTP server plugin: {}", e);

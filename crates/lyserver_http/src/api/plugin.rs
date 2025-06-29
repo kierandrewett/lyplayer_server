@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc, task::{Context, Poll}, time::Duration
 use actix_web::{body::BoxBody, dev::{Service, ServiceRequest, ServiceResponse, Transform}, http::StatusCode, web::{self, BytesMut}, Error, HttpMessage};
 use futures_util::{future::{ok, LocalBoxFuture, Ready}, StreamExt};
 use lyserver_http_shared::{LYServerHTTPRequest, LYServerHTTPResponse};
-use lyserver_messaging_shared::LYServerMessageEventTarget;
+use lyserver_messaging_shared::{LYServerMessageEvent, LYServerMessageEventTarget};
 use lyserver_plugin_shared_data::LYServerPluginSharedData;
 use lyserver_shared_data::{LYServerSharedData, LYServerSharedDataMessaging, LYServerSharedDataPlugins};
 use serde::Serialize;
@@ -98,45 +98,83 @@ where
                     actix_web::error::ErrorInternalServerError("dispatch err")
                 })?;
     
-                if let Some(reply) = shared_plugin_data
-                    .wait_until_event(
-                        |event| event.event_type == "http_response" && event.event_id == msg_id,
-                        Duration::from_secs(5),
-                    )
-                    .await
-                {
-                    let http_resp: LYServerHTTPResponse = reply.data_as().map_err(|e| {
-                        log::error!("Plugin response deserialisation failed: {}", e);
-                        actix_web::error::ErrorInternalServerError("deser fail")
-                    })?;
-    
-                    let mut builder = actix_web::HttpResponse::build(
-                        StatusCode::from_u16(http_resp.status_code)
-                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                    );
-    
-                    for (k, v) in http_resp.headers {
-                        builder.insert_header((k, v));
-                    }
-    
-                    let plugin_id = reply.event_sender.to_string();
-                    if let Some(plugin_meta) = shared_plugin_data
-                        .app_shared_data
-                        .get_plugin_metadata_by_id(&plugin_id)
+                log::debug!("WAITING FOR HANDLE INTENT....");
+
+                let shared_plugin_data_clone = Arc::clone(&shared_plugin_data);
+                let resp: anyhow::Result<LYServerMessageEvent> = {
+                    let msg_id_clone = msg_id.clone();
+
+                    if let Some(reply) = shared_plugin_data_clone
+                        .wait_until_event(
+                            move |event| event.event_type == "http_request_handle_intent" && event.event_id == msg_id_clone.clone(),
+                            Duration::from_secs(5),
+                        )
                         .await
                     {
-                        builder.insert_header(("x-lyserver-plugin-id", plugin_meta.id));
-                        builder.insert_header(("x-lyserver-plugin-version", plugin_meta.version));
-                        builder.insert_header(("x-lyserver-plugin-name", plugin_meta.name));
+                        log::debug!("Plugin '{}' handling HTTP request event: {}", reply.event_sender.to_string(), reply.event_id);
+
+                        let msg_id_clone = msg_id.clone();
+
+                        if let Some(reply) = shared_plugin_data_clone
+                            .wait_until_event(
+                                move |event| event.event_type == "http_response" && event.event_id == msg_id_clone.clone(),
+                                Duration::from_secs(60),
+                            )
+                            .await
+                        {
+                            Ok(reply)
+                        } else {
+                            Err(anyhow::anyhow!("Plugin response timed out after 60s").into())
+                        }
+                    } else {
+                        Err(anyhow::anyhow!("No plugin responded with intent").into())
                     }
-    
-                    let final_resp = builder.body(http_resp.body).map_into_boxed_body();
-                    Ok(ServiceResponse::new(
-                        req_for_response.request().clone(),
-                        final_resp,
-                    ))
-                } else {
-                    Err(anyhow::anyhow!("No plugin response").into())
+                };
+
+                match resp {
+                    Ok(reply) => {
+                        let http_resp: LYServerHTTPResponse = reply.data_as().map_err(|e| {
+                            log::error!("Plugin response deserialisation failed: {}", e);
+                            actix_web::error::ErrorInternalServerError("deser fail")
+                        })?;
+        
+                        let mut builder = actix_web::HttpResponse::build(
+                            StatusCode::from_u16(http_resp.status_code)
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                        );
+        
+                        for (k, v) in http_resp.headers {
+                            builder.insert_header((k, v));
+                        }
+        
+                        let plugin_id = reply.event_sender.to_string();
+                        if let Some(plugin_meta) = shared_plugin_data
+                            .app_shared_data
+                            .get_plugin_metadata_by_id(&plugin_id)
+                            .await
+                        {
+                            builder.insert_header(("x-lyserver-plugin-id", plugin_meta.id));
+                            builder.insert_header(("x-lyserver-plugin-version", plugin_meta.version));
+                            builder.insert_header(("x-lyserver-plugin-name", plugin_meta.name));
+                        }
+        
+                        let final_resp = builder.body(http_resp.body).map_into_boxed_body();
+                        Ok(ServiceResponse::new(
+                            req_for_response.request().clone(),
+                            final_resp,
+                        ))
+                    },
+                    Err(e) => {
+                        let new_resp = actix_web::HttpResponse::InternalServerError()
+                            .body(format!("{}", e));
+
+                        let resp = ServiceResponse::new(
+                            req_for_response.request().clone(),
+                            new_resp.map_into_boxed_body(),
+                        );
+
+                        Ok(resp)
+                    }
                 }
             } else {
                 Err(anyhow::anyhow!("Missing plugin data").into())

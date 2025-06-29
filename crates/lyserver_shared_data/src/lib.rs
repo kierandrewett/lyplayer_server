@@ -13,7 +13,7 @@ pub use database::{LYServerSharedDataDatabase};
 
 use lyserver_plugin_common::{LYServerPlugin, LYServerPluginMetadata};
 use sysinfo::System;
-use tokio::sync::{broadcast::Sender, mpsc::{UnboundedReceiver, UnboundedSender}, Mutex, RwLock};
+use tokio::sync::{broadcast::{Receiver, Sender}, mpsc::{UnboundedReceiver, UnboundedSender}, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 
 use std::{collections::{HashMap, HashSet}, net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener}, path::{Path, PathBuf}, sync::{atomic::AtomicBool, Arc}, time::SystemTime};
@@ -63,6 +63,14 @@ pub struct LYServerSharedData {
 
     pub pid: u32,
     pub system: Arc<RwLock<System>>,
+    pub system_cpu_count: usize,
+
+    pub platform: String,
+
+    pub os: String,
+    pub os_version: String,
+    pub os_kernel_version: String,
+    pub os_hostname: String,
 }
 
 impl LYServerSharedData {
@@ -70,7 +78,19 @@ impl LYServerSharedData {
         let (tx, _) = tokio::sync::broadcast::channel::<LYServerMessageEvent>(512);
 
         let pid = std::process::id();
+        let system = System::new_all();
+        let system_cpu_count = system.cpus().len();
+
         let system = Arc::new(RwLock::new(System::new_all()));
+
+        let platform = std::env::consts::OS.to_string();
+
+        let os = System::name().unwrap_or_else(|| "Unknown".to_string());
+        let os_version = System::os_version().unwrap_or_else(|| "Unknown".to_string());
+        let os_kernel_version = System::kernel_version().unwrap_or_else(|| "Unknown".to_string());
+        let os_hostname = System::host_name().unwrap_or_else(|| "Unknown".to_string());
+
+        let rx = tx.subscribe();
 
         let data = Self {
             bind_address,
@@ -90,6 +110,14 @@ impl LYServerSharedData {
 
             pid,
             system,
+            system_cpu_count,
+
+            platform,
+
+            os,
+            os_version,
+            os_kernel_version,
+            os_hostname,
         };
 
         let system_clone = Arc::clone(&data.system);
